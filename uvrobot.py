@@ -62,8 +62,8 @@ def stop():
     GPIO.output(m22, 0)
 
 def forward():
-    en1.ChangeDutyCycle(60)
-    en2.ChangeDutyCycle(60)
+    en1.ChangeDutyCycle(55)
+    en2.ChangeDutyCycle(55)
     GPIO.output(m11, 1)
     GPIO.output(m12, 0)
     GPIO.output(m21, 1)
@@ -160,7 +160,7 @@ def move():
         stop()
         time.sleep(1)
         back()
-        time.sleep(1.8)
+        time.sleep(1.5)
 
         if (count%3 ==1) & (flag==0):
          right()
@@ -175,6 +175,18 @@ def move():
         forward()
         flag=0
         
+        
+def buzzer_alert():
+    print("human detected")
+    stop()
+    GPIO.output(led, 0)
+    back()
+    time.sleep(0.5)
+    GPIO.output(buzzer, 1)
+    time.sleep(1)
+    GPIO.output(buzzer, 0)
+    time.sleep(4)
+        
 
 ## Initializing video stream
 print('[INFO] starting video stream...')
@@ -182,10 +194,12 @@ cap = cv2.VideoCapture(0)
 time.sleep(1.0)
 
 try:
-
+    robot_start=time.time()
+    robot_end=time.time()
     while True:
         i=GPIO.input(PIR)
         ret, frame = cap.read()
+        print(robot_start, robot_end)
         
         # Sound the buzzer for 1 second every 5 seconds
         if i==1:
@@ -200,48 +214,71 @@ try:
             time.sleep(4)
         else:
             GPIO.output(led, 1)
-            back
-            time.sleep(1)
-            move()
-            time.sleep(2)
-            stop()
-            time.sleep(10)
-
-            pred = main(model, frame)
-            print(pred)
-
-            if pred is not None:
+            #back()
+            #time.sleep(1)
+            #right()
+            #time.sleep(1)
+            m_end = time.time() + 10
+            while time.time() < m_end:
+                move()
+            
+            t_end = time.time() + 2 * 60
+            while time.time() < t_end:
                 stop()
-                time.sleep(1)
-                (startX, startY, endX, endY) = round(pred['x1']), round(pred['y1']), round(pred['x2']), round(pred['y2'])
-                color = (0, 255, 0)
-                label = f"{pred['class']} {float(pred['conf']):0.2f}"
+                pred = main(model, frame)
+                print(pred)
+                time.sleep(60)
 
-                cv2.putText(frame, label, (startX, startY - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
-                cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
- 
-                if endX >= 600:
+                if pred is not None:
                     stop()
-                    time.sleep(0.1)
-                    print("turn right")
-                    time.sleep(0.2)
-                elif startX <= 50:
-                    stop()
-                    time.sleep(0.1)
-                    print("turn left")
-                    left()
-                    time.sleep(0.2)
-                else:
-                    print("Move forward")
-                    forward()
-                    time.sleep(0.5)
-                    dist_obj =  get_distance()
-                    if dist_obj <= 20:
+                    #time.sleep(1)
+                    (startX, startY, endX, endY) = round(pred['x1']), round(pred['y1']), round(pred['x2']), round(pred['y2'])
+                    color = (0, 255, 0)
+                    label = f"{pred['class']} {float(pred['conf']):0.2f}"
+
+                    cv2.putText(frame, label, (startX, startY - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
+                    cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
+                    print("update frame")
+                    cv2.imshow("Frame", frame)
+                    
+                    if endX >= 600:
+                        t_end = time.time() + 30
                         stop()
-                        time.sleep(2 * 60)
-
-            cv2.imshow("Frame", frame)
+                        time.sleep(0.1)
+                        print("turn right")
+                        right()
+                        time.sleep(0.2)
+                    elif startX <= 40:
+                        t_end = time.time() + 30
+                        stop()
+                        time.sleep(0.1)
+                        print("turn left")
+                        left()
+                        time.sleep(0.2)
+                    else:
+                        print("Move forward")
+                        forward()
+                        time.sleep(1)
+                        #stop()
+                        #time.sleep(5)
+                        dist_obj =  get_distance()
+                        if dist_obj <= 20:
+                            stop()
+                            time.sleep(2 * 60)
+                            robot_start=time.time()
+                            robot_end=time.time()
+                            break
+                else:
+                    robot_end=time.time()
+                print("update frame 2")
+                cv2.imshow("Frame", frame)
+                
+            if robot_end - robot_start > 10 * 60:
+                print("No object detected in 10 minutes")
+                robot_end=time.time()
+                break
+           
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break
